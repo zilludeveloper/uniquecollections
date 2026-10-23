@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="bn"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>আমার দোকান</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--ink:#12372a;--bg:#f5f7f4;--card:#fff;--line:#dde4df;--acc:#f2a900;--red:#c0392b;--mut:#5d6f66}
+*{box-sizing:border-box}body{margin:0;font-family:'Noto Sans Bengali',sans-serif;background:var(--bg);color:var(--ink);line-height:1.6}
+a{color:inherit;text-decoration:none}header{background:var(--ink);color:#fff;position:sticky;top:0;z-index:9}
+.bar{max-width:1100px;margin:auto;padding:10px 16px;display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+.logo{font-weight:700;font-size:1.3rem;margin-right:auto}nav a{margin-left:12px;font-size:.95rem}
+main{max-width:1100px;margin:auto;padding:20px 16px;min-height:70vh}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.card img,.ph{width:100%;aspect-ratio:1;object-fit:cover;background:#e6ece8;display:block}
+.card .b{padding:12px}.p{font-weight:700;font-size:1.1rem}.old{text-decoration:line-through;color:var(--mut);font-size:.9rem;margin-left:6px}
+button,.btn{font:inherit;cursor:pointer;border:0;border-radius:8px;padding:9px 16px;background:var(--acc);color:#1b1b1b;font-weight:700;display:inline-block}
+.btn2{background:var(--ink);color:#fff}.del{background:var(--red);color:#fff}.sm{padding:4px 10px;font-size:.85rem}
+input,select,textarea{font:inherit;width:100%;padding:9px;border:1px solid var(--line);border-radius:8px;background:#fff;margin:4px 0 10px}
+label{font-weight:600;font-size:.92rem}.two{display:grid;grid-template-columns:1fr 1fr;gap:24px}
+.box{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px}
+.sum div{display:flex;justify-content:space-between;padding:3px 0}.tot{border-top:2px solid var(--ink);font-weight:700;font-size:1.1rem;margin-top:6px;padding-top:6px!important}
+.opt{display:flex;gap:8px;align-items:center;padding:8px;border:1px solid var(--line);border-radius:8px;margin-bottom:6px}.opt input{width:auto;margin:0}
+table{width:100%;border-collapse:collapse;font-size:.88rem;background:#fff}td,th{border:1px solid var(--line);padding:6px;text-align:left;vertical-align:top}th{background:#e9efeb}
+.tabs a{padding:8px 14px;border-radius:8px;margin-right:6px;background:#e1e9e4;display:inline-block}.tabs a.on{background:var(--ink);color:#fff}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin:12px 0}.stats .box b{font-size:1.4rem;display:block}
+.c{text-align:center;padding:40px 0}.scroll{overflow-x:auto}footer{text-align:center;padding:24px;color:var(--mut);font-size:.9rem}
+.msg{padding:10px;border-radius:8px;background:#fdecea;color:var(--red);margin-bottom:10px}
+@media(max-width:700px){.two{grid-template-columns:1fr}}
+</style></head><body>
+<header><div class="bar"><a class="logo" href="#/" id="logo"></a><nav id="nav"></nav></div></header>
+<main id="app"><p class="c">লোড হচ্ছে...</p></main>
+<footer id="foot"></footer>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script>
+/* ===== সেটিংস: এখানে বদলান (অথবা অ্যাডমিন > সেটিংস থেকে) ===== */
+const C={
+ shopName:"আমার দোকান", phone:"01XXXXXXXXX",
+ fb:"https://www.facebook.com/profile.php?id=61595741817036",
+ feeDhaka:70, feeOut:130,
+ admins:["your-email@gmail.com"],   // অ্যাডমিনদের ইমেইল
+ firebase:{apiKey:"",authDomain:"",projectId:"",appId:""}  // Firebase থেকে কপি করুন
+};
+firebase.initializeApp(C.firebase);
+const auth=firebase.auth(),db=firebase.firestore();
+const $=s=>document.querySelector(s),app=h=>{$('#app').innerHTML=h;scrollTo(0,0)};
+const bn=n=>Number(n).toLocaleString('bn-BD'),tk=n=>'৳'+bn(n);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const en=s=>String(s).replace(/[০-৯]/g,d=>'০১২৩৪৫৬৭৮৯'.indexOf(d));
+const ST={new:'নতুন',confirmed:'কনফার্মড',shipped:'কুরিয়ারে',delivered:'ডেলিভারি হয়েছে',cancelled:'বাতিল'};
+let user=null,products=[],ords=[],cart=JSON.parse(localStorage.cart||'[]');
+const isAdmin=()=>user&&C.admins.map(e=>e.toLowerCase()).includes((user.email||'').toLowerCase());
+const saveCart=()=>{localStorage.cart=JSON.stringify(cart);head()};
+const fee=a=>a==='dhaka'?C.feeDhaka:C.feeOut;
+
+function head(){
+ $('#logo').textContent=C.shopName;document.title=C.shopName;
+ const n=cart.reduce((s,i)=>s+i.qty,0);
+ $('#nav').innerHTML=`<a href="#/">হোম</a><a href="#/cart">🛒 কার্ট (${bn(n)})</a>`+
+ (user?`${isAdmin()?'<a href="#/admin">ড্যাশবোর্ড</a>':''}<a href="#/my">আমার অর্ডার</a><a href="#" onclick="auth.signOut();return false">লগআউট</a>`:'<a href="#/login">লগইন / সাইন আপ</a>');
+ $('#foot').innerHTML=`<p>ক্যাশ অন ডেলিভারি • ঢাকার ভিতরে ডেলিভারি ${tk(C.feeDhaka)}, ঢাকার বাইরে ${tk(C.feeOut)}</p><p>📞 ${esc(C.phone)} • <a href="${esc(C.fb)}" target="_blank" rel="noopener"><b>ফেসবুক পেজ</b></a></p><p>© ${esc(C.shopName)}</p>`;
+}
+async function loadAll(){
+ try{const s=await db.doc('settings/main').get();if(s.exists)Object.assign(C,s.data(),{admins:C.admins,firebase:C.firebase})}catch(e){}
+ try{products=(await db.collection('products').orderBy('createdAt','desc').get()).docs.map(d=>({id:d.id,...d.data()}))}catch(e){console.error(e)}
+}
+const pcard=p=>`<div class="card"><a href="#/p/${p.id}"><img src="${esc(p.image)}" alt="" onerror="this.style.visibility='hidden'"></a><div class="b"><a href="#/p/${p.id}">${esc(p.name)}</a><div><span class="p">${tk(p.price)}</span>${p.oldPrice?`<span class="old">${tk(p.oldPrice)}</span>`:''}</div>
+<div style="display:flex;gap:6px;margin-top:8px"><a class="btn sm" href="#/p/${p.id}">অর্ডার করুন</a><button class="btn2 sm" onclick="addCart('${p.id}')">কার্টে নিন</button></div></div></div>`;
+function addCart(id,q=1){const i=cart.find(x=>x.id===id);i?i.qty+=q:cart.push({id,qty:q});saveCart();alert('কার্টে যোগ হয়েছে ✔')}
+
+/* ===== চেকআউট ফর্ম (প্রোডাক্ট পেজ ও কার্ট উভয়ে ব্যবহৃত) ===== */
+function checkout(el,getItems){
+ const u=user||{};
+ el.innerHTML=`<div class="box"><h3>ডেলিভারির তথ্য</h3><div id="err"></div>
+ <label>আপনার নাম *</label><input id="f_name" value="${esc(u.displayName||'')}">
+ <label>মোবাইল নম্বর *</label><input id="f_phone" type="tel" placeholder="01XXXXXXXXX">
+ <label>সম্পূর্ণ ঠিকানা *</label><textarea id="f_addr" rows="2"></textarea>
+ <label>ডেলিভারি এলাকা</label>
+ <label class="opt"><input type="radio" name="area" value="dhaka" checked> ঢাকার ভিতরে — ${tk(C.feeDhaka)}</label>
+ <label class="opt"><input type="radio" name="area" value="out"> ঢাকার বাইরে — ${tk(C.feeOut)}</label>
+ <label>নোট (ঐচ্ছিক)</label><input id="f_note">
+ <div class="sum" id="sum"></div><p style="font-size:.9rem;color:var(--mut)">💵 পেমেন্ট: ক্যাশ অন ডেলিভারি (পণ্য হাতে পেয়ে টাকা দিন)</p>
+ <button style="width:100%" id="go">অর্ডার কনফার্ম করুন</button></div>`;
+ const area=()=>el.querySelector('[name=area]:checked').value;
+ const calc=()=>{const sub=getItems().reduce((s,i)=>s+i.price*i.qty,0),f=fee(area());
+  $('#sum').innerHTML=`<div><span>সাবটোটাল</span><span>${tk(sub)}</span></div><div><span>ডেলিভারি চার্জ</span><span>${tk(f)}</span></div><div class="tot"><span>সর্বমোট</span><span>${tk(sub+f)}</span></div>`};
+ el.addEventListener('change',calc);el.calc=calc;calc();
+ $('#go').onclick=async()=>{
+  const name=$('#f_name').value.trim(),phone=en($('#f_phone').value.trim()),address=$('#f_addr').value.trim(),items=getItems();
+  const bad=!name?'নাম লিখুন':!/^01[3-9]\d{8}$/.test(phone)?'সঠিক মোবাইল নম্বর দিন (১১ ডিজিট)':!address?'ঠিকানা লিখুন':!items.length?'কোনো পণ্য নেই':'';
+  if(bad){$('#err').innerHTML=`<div class="msg">${bad}</div>`;return}
+  $('#go').disabled=true;$('#go').textContent='অপেক্ষা করুন...';
+  const sub=items.reduce((s,i)=>s+i.price*i.qty,0),a=area(),f=fee(a),no='ORD'+Date.now().toString().slice(-8);
+  try{await db.collection('orders').add({no,items,name,phone,address,area:a,fee:f,sub,total:sub+f,status:'new',payment:'COD',note:$('#f_note').value.trim(),uid:user?user.uid:null,createdAt:firebase.firestore.FieldValue.serverTimestamp()});
+   if(getItems.fromCart){cart=[];saveCart()}
+   app(`<div class="c"><h2>✅ অর্ডার সম্পন্ন হয়েছে!</h2><p>আপনার অর্ডার নম্বর: <b>${no}</b></p><p>সর্বমোট ${tk(sub+f)} — পণ্য হাতে পেয়ে পরিশোধ করবেন।</p><p>আমরা শীঘ্রই আপনাকে ফোন করে কনফার্ম করব।</p><a class="btn" href="#/">আরও পণ্য দেখুন</a></div>`);
+  }catch(e){console.error(e);$('#go').disabled=false;$('#go').textContent='অর্ডার কনফার্ম করুন';$('#err').innerHTML='<div class="msg">অর্ডার হয়নি, আবার চেষ্টা করুন।</div>'}
+ }
+}
+
+/* ===== পেজসমূহ ===== */
+function home(){app(`<h2>সব পণ্য</h2>${products.filter(p=>p.active!==false).length?`<div class="grid">${products.filter(p=>p.active!==false).map(pcard).join('')}</div>`:'<p class="c">এখনও কোনো পণ্য নেই।</p>'}`)}
+function product(id){
+ const p=products.find(x=>x.id===id);if(!p)return app('<p class="c">পণ্য পাওয়া যায়নি।</p>');
+ const imgs=[p.image,...(p.images||'').split(',').map(s=>s.trim()).filter(Boolean)];
+ app(`<div class="two"><div><img class="ph" id="big" src="${esc(imgs[0])}" style="border-radius:10px">
+ <div style="display:flex;gap:6px;margin-top:6px">${imgs.slice(1).concat(imgs.length>1?[imgs[0]]:[]).map(s=>`<img src="${esc(s)}" style="width:64px;height:64px;object-fit:cover;border-radius:6px;cursor:pointer" onclick="$('#big').src=this.src">`).join('')}</div></div>
+ <div><h2>${esc(p.name)}</h2><div><span class="p" style="font-size:1.6rem">${tk(p.price)}</span>${p.oldPrice?`<span class="old">${tk(p.oldPrice)}</span>`:''}</div>
+ <p style="white-space:pre-line">${esc(p.desc)}</p><label>পরিমাণ</label><input id="qty" type="number" min="1" value="1" style="width:100px">
+ <button class="btn2" onclick="addCart('${p.id}',+$('#qty').value||1)">কার্টে যোগ করুন</button></div></div>
+ <h2 style="margin-top:24px">এখনই অর্ডার করুন</h2><div id="co"></div>`);
+ const q=()=>Math.max(1,parseInt($('#qty').value)||1);
+ checkout($('#co'),()=>[{id:p.id,name:p.name,price:+p.price,qty:q()}]);
+ $('#qty').oninput=()=>$('#co').calc();
+}
+function cartPage(){
+ const rows=cart.map(i=>({...i,p:products.find(x=>x.id===i.id)})).filter(i=>i.p);
+ if(!rows.length)return app('<p class="c">আপনার কার্ট খালি। <a class="btn" href="#/">কেনাকাটা করুন</a></p>');
+ app(`<h2>আপনার কার্ট</h2><div class="two"><div class="box">${rows.map(r=>`<div style="display:flex;gap:10px;align-items:center;margin-bottom:10px"><img src="${esc(r.p.image)}" style="width:60px;height:60px;object-fit:cover;border-radius:8px"><div style="flex:1">${esc(r.p.name)}<br>${tk(r.p.price)}</div>
+ <input type="number" min="1" value="${r.qty}" style="width:70px;margin:0" onchange="setQty('${r.id}',this.value)"><button class="del sm" onclick="setQty('${r.id}',0)">✕</button></div>`).join('')}</div><div id="co"></div></div>`);
+ const g=()=>cart.map(i=>({i,p:products.find(x=>x.id===i.id)})).filter(x=>x.p).map(x=>({id:x.p.id,name:x.p.name,price:+x.p.price,qty:x.i.qty}));
+ g.fromCart=true;checkout($('#co'),g);
+}
+function setQty(id,q){q=parseInt(q)||0;cart=q>0?cart.map(i=>i.id===id?{...i,qty:q}:i):cart.filter(i=>i.id!==id);saveCart();cartPage()}
+function login(signup){
+ app(`<div class="box" style="max-width:380px;margin:auto"><h2>${signup?'সাইন আপ':'লগইন'}</h2><div id="err"></div>
+ ${signup?'<label>নাম</label><input id="a_name">':''}<label>ইমেইল</label><input id="a_mail" type="email"><label>পাসওয়ার্ড (কমপক্ষে ৬ অক্ষর)</label><input id="a_pass" type="password">
+ <button style="width:100%" id="ok">${signup?'অ্যাকাউন্ট খুলুন':'লগইন করুন'}</button>
+ <p><a href="#/${signup?'login':'signup'}"><u>${signup?'অ্যাকাউন্ট আছে? লগইন':'নতুন? সাইন আপ করুন'}</u></a></p><p style="font-size:.85rem;color:var(--mut)">অ্যাকাউন্ট ছাড়াও অর্ডার করা যায়।</p></div>`);
+ $('#ok').onclick=async()=>{try{
+  if(signup){const c=await auth.createUserWithEmailAndPassword($('#a_mail').value,$('#a_pass').value);await c.user.updateProfile({displayName:$('#a_name').value})}
+  else await auth.signInWithEmailAndPassword($('#a_mail').value,$('#a_pass').value);
+  location.hash='#/'}catch(e){$('#err').innerHTML='<div class="msg">ইমেইল/পাসওয়ার্ড সঠিক নয় বা অ্যাকাউন্ট আগেই আছে।</div>'}}
+}
+async function myOrders(){
+ if(!user)return location.hash='#/login';
+ const s=await db.collection('orders').where('uid','==',user.uid).get();
+ app(`<h2>আমার অর্ডার</h2>${s.empty?'<p>কোনো অর্ডার নেই।</p>':s.docs.map(d=>d.data()).map(o=>`<div class="box" style="margin-bottom:8px"><b>${o.no}</b> — ${ST[o.status]}<br>${o.items.map(i=>esc(i.name)+' ×'+bn(i.qty)).join(', ')}<br>মোট: ${tk(o.total)}</div>`).join('')}`);
+}
+
+/* ===== অ্যাডমিন ড্যাশবোর্ড ===== */
+async function admin(tab='orders'){
+ if(!isAdmin())return app('<p class="c">এই পেজ শুধু অ্যাডমিনের জন্য। অ্যাডমিন ইমেইল দিয়ে লগইন করুন।</p>');
+ const tabs=`<div class="tabs">${[['orders','অর্ডার'],['products','পণ্য'],['settings','সেটিংস']].map(t=>`<a href="#/admin/${t[0]}" class="${t[0]===tab?'on':''}">${t[1]}</a>`).join('')}</div>`;
+ if(tab==='orders'){
+  ords=(await db.collection('orders').orderBy('createdAt','desc').limit(500).get()).docs.map(d=>({id:d.id,...d.data()}));
+  const n=s=>ords.filter(o=>o.status===s).length;
+  app(`${tabs}<div class="stats"><div class="box">মোট অর্ডার<b>${bn(ords.length)}</b></div><div class="box">নতুন<b>${bn(n('new'))}</b></div><div class="box">কুরিয়ারে<b>${bn(n('shipped'))}</b></div><div class="box">বিক্রি (ডেলিভারড)<b>${tk(ords.filter(o=>o.status==='delivered').reduce((s,o)=>s+o.total,0))}</b></div></div>
+  <div style="display:flex;gap:8px"><select id="fs" onchange="ordTable()"><option value="">সব স্ট্যাটাস</option>${Object.entries(ST).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}</select><input id="q" placeholder="নাম / ফোন / অর্ডার নং" oninput="ordTable()"><button class="btn2" onclick="csv()" style="white-space:nowrap">CSV ডাউনলোড</button></div><div class="scroll" id="ot"></div>`);
+  ordTable();
+ }
+ if(tab==='products'){
+  app(`${tabs}<div class="box"><h3 id="pt">নতুন পণ্য যোগ করুন</h3><input type="hidden" id="p_id">
+  <label>পণ্যের নাম</label><input id="p_name"><div class="two" style="gap:10px"><div><label>বিক্রয় মূল্য (৳)</label><input id="p_price" type="number"></div><div><label>আগের মূল্য (ঐচ্ছিক)</label><input id="p_old" type="number"></div></div>
+  <label>মূল ছবির লিংক (URL)</label><input id="p_img" placeholder="https://..."><label>আরও ছবির লিংক (কমা দিয়ে আলাদা)</label><input id="p_imgs">
+  <label>বিবরণ</label><textarea id="p_desc" rows="4"></textarea><label class="opt"><input type="checkbox" id="p_act" checked> দোকানে দেখান</label>
+  <button onclick="saveP()">সেভ করুন</button> <button class="btn2" onclick="admin('products')">রিসেট</button></div>
+  <h3>সব পণ্য</h3><div class="scroll"><table><tr><th>ছবি</th><th>নাম</th><th>মূল্য</th><th>স্ট্যাটাস</th><th></th></tr>${products.map(p=>`<tr><td><img src="${esc(p.image)}" width="44"></td><td>${esc(p.name)}</td><td>${tk(p.price)}</td><td>${p.active===false?'লুকানো':'চালু'}</td><td><button class="sm" onclick="editP('${p.id}')">এডিট</button> <button class="del sm" onclick="delP('${p.id}')">ডিলিট</button></td></tr>`).join('')}</table></div>`);
+ }
+ if(tab==='settings'){
+  app(`${tabs}<div class="box" style="max-width:480px"><label>দোকানের নাম</label><input id="s_n" value="${esc(C.shopName)}"><label>ফোন</label><input id="s_p" value="${esc(C.phone)}"><label>ফেসবুক পেজ লিংক</label><input id="s_f" value="${esc(C.fb)}">
+  <label>ঢাকার ভিতরে ডেলিভারি চার্জ</label><input id="s_d" type="number" value="${C.feeDhaka}"><label>ঢাকার বাইরে ডেলিভারি চার্জ</label><input id="s_o" type="number" value="${C.feeOut}"><button onclick="saveS()">সেভ করুন</button></div>`);
+ }
+}
+function ordTable(){
+ const s=$('#fs').value,q=$('#q').value.toLowerCase();
+ const L=ords.filter(o=>(!s||o.status===s)&&(!q||(o.name+o.phone+o.no).toLowerCase().includes(q)));
+ $('#ot').innerHTML=`<table><tr><th>অর্ডার</th><th>গ্রাহক</th><th>পণ্য</th><th>মোট</th><th>স্ট্যাটাস</th><th></th></tr>${L.map(o=>`<tr><td><b>${o.no}</b><br>${o.createdAt?o.createdAt.toDate().toLocaleString('bn-BD'):''}</td>
+ <td>${esc(o.name)}<br><a href="tel:${o.phone}"><u>${o.phone}</u></a><br>${esc(o.address)}<br>${o.area==='dhaka'?'ঢাকার ভিতরে':'ঢাকার বাইরে'}${o.note?'<br>📝 '+esc(o.note):''}</td>
+ <td>${o.items.map(i=>esc(i.name)+' ×'+bn(i.qty)).join('<br>')}</td><td>${tk(o.total)}<br><small>(ডেলিভারি ${tk(o.fee)})</small></td>
+ <td><select onchange="setSt('${o.id}',this.value)" style="width:auto">${Object.entries(ST).map(([k,v])=>`<option value="${k}" ${k===o.status?'selected':''}>${v}</option>`).join('')}</select></td>
+ <td><button class="sm" onclick="inv('${o.id}')">প্রিন্ট</button> <button class="del sm" onclick="delO('${o.id}')">ডিলিট</button></td></tr>`).join('')}</table>`;
+}
+const setSt=(id,v)=>{db.doc('orders/'+id).update({status:v});ords.find(o=>o.id===id).status=v};
+async function delO(id){if(confirm('অর্ডারটি ডিলিট করবেন?')){await db.doc('orders/'+id).delete();admin('orders')}}
+function inv(id){const o=ords.find(x=>x.id===id),w=open('');w.document.write(`<meta charset=utf-8><body style="font-family:sans-serif;max-width:480px;margin:auto"><h2>${esc(C.shopName)}</h2><p>অর্ডার: ${o.no}</p><p><b>${esc(o.name)}</b><br>${o.phone}<br>${esc(o.address)}</p><hr>${o.items.map(i=>`<p>${esc(i.name)} × ${bn(i.qty)} = ${tk(i.price*i.qty)}</p>`).join('')}<p>ডেলিভারি: ${tk(o.fee)}</p><h3>কালেক্ট করুন (COD): ${tk(o.total)}</h3><script>print()<\/script>`)}
+function csv(){const r=[['Order','Date','Name','Phone','Address','Area','Items','Fee','Total','Status']].concat(ords.map(o=>[o.no,o.createdAt?o.createdAt.toDate().toISOString():'',o.name,o.phone,o.address,o.area,o.items.map(i=>i.name+'x'+i.qty).join('; '),o.fee,o.total,o.status]));
+ const t='\ufeff'+r.map(x=>x.map(c=>'"'+String(c).replace(/"/g,'""')+'"').join(',')).join('\n'),a=document.createElement('a');a.href=URL.createObjectURL(new Blob([t],{type:'text/csv'}));a.download='orders.csv';a.click()}
+async function saveP(){
+ const d={name:$('#p_name').value.trim(),price:+$('#p_price').value,oldPrice:+$('#p_old').value||0,image:$('#p_img').value.trim(),images:$('#p_imgs').value.trim(),desc:$('#p_desc').value,active:$('#p_act').checked};
+ if(!d.name||!d.price)return alert('নাম ও মূল্য দিন');const id=$('#p_id').value;
+ if(id)await db.doc('products/'+id).update(d);else await db.collection('products').add({...d,createdAt:firebase.firestore.FieldValue.serverTimestamp()});
+ await loadAll();admin('products')
+}
+function editP(id){const p=products.find(x=>x.id===id);$('#pt').textContent='পণ্য এডিট করুন';$('#p_id').value=id;$('#p_name').value=p.name;$('#p_price').value=p.price;$('#p_old').value=p.oldPrice||'';$('#p_img').value=p.image;$('#p_imgs').value=p.images||'';$('#p_desc').value=p.desc||'';$('#p_act').checked=p.active!==false;scrollTo(0,0)}
+async function delP(id){if(confirm('পণ্যটি ডিলিট করবেন?')){await db.doc('products/'+id).delete();await loadAll();admin('products')}}
+async function saveS(){const d={shopName:$('#s_n').value,phone:$('#s_p').value,fb:$('#s_f').value,feeDhaka:+$('#s_d').value,feeOut:+$('#s_o').value};await db.doc('settings/main').set(d);Object.assign(C,d);head();alert('সেভ হয়েছে ✔')}
+
+/* ===== রাউটার ===== */
+function route(){
+ const [a,b]=location.hash.slice(2).split('/');
+ if(a==='p')product(b);else if(a==='cart')cartPage();else if(a==='login')login(false);else if(a==='signup')login(true);
+ else if(a==='my')myOrders();else if(a==='admin')admin(b||'orders');else home();
+}
+addEventListener('hashchange',route);
+auth.onAuthStateChanged(u=>{user=u;head();if(window.ready)route()});
+head();loadAll().then(()=>{window.ready=1;head();route()});
+</script></body></html>
